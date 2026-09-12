@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# 构建产物
+dist/
+build/
+*.spec
+app.ico
+
+# 运行时数据（用户课表/日程，勿上传）
+data/
+config/
+*.log
+theme_trace.log
+today_dark_trace.log
+
+# 内部工作记录（不公开）
+工作记录.md
+RESUME.md
+
+# 临时
+m0_*
+m1_*
+m2_*
+burst_*
+rev_exe.png
+
+# 复盘连拍（精选已入 docs/screenshots）
+rev_*.png
+grab_*.png
