@@ -1,101 +1,92 @@
 # -*- coding: utf-8 -*-
-"""月历页（M5 大改版）：格子内嵌农历/节日/课程日程点，无双击交互（悬停即详情）。"""
+"""月历页（对齐系统日历风格）：大数字+农历/节日+休班细标、单击选中、
+底部干支详情行+当日列表、今/加按钮。"""
 import calendar
 import datetime as dt
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QFrame, QGridLayout, QHBoxLayout, QLabel,
-                               QVBoxLayout, QWidget)
+                               QScrollArea, QVBoxLayout, QWidget)
 
-from qfluentwidgets import (BodyLabel, CaptionLabel, FluentIcon as FIF,
-                            PrimaryPushButton, PushButton, StrongBodyLabel,
-                            SubtitleLabel, isDarkTheme)
+from qfluentwidgets import (BodyLabel, CaptionLabel, CardWidget,
+                            FluentIcon as FIF, PrimaryPushButton, PushButton,
+                            StrongBodyLabel, SubtitleLabel, isDarkTheme)
 
 import db
 import lunar
 import reminder
 from app.core import schedule_query
 from app.ui import tokens
+from app.ui.dialogs.event_dialog import EventDialog
 
-WEEKDAY_CN = ["一", "二", "三", "四", "五", "六", "日"]
+WEEKDAY_CN = ["日", "一", "二", "三", "四", "五", "六"]  # 周日起
+RED_FESTIVALS = {"春节", "元宵节", "清明节", "端午节", "七夕", "中秋节", "重阳节",
+                 "元旦", "劳动节", "国庆节"}
 
 
 class DayCell(QFrame):
-    """月历单格：公历日 + 农历/节日 + 休班角标 + 课程与日程点（悬停显示当日详情）。"""
+    """月历格：大数字 + 休班细标 + 农历/节日（可单击选中）。"""
 
-    def __init__(self, day, lunar_text, festival, holiday, course_hues,
-                 course_count, event_count, is_today, dark, tip, parent=None):
+    def __init__(self, day, side_text, side_kind, holiday, is_today, selected,
+                 dark, tip, parent=None):
         super().__init__(parent)
         mode = "dark" if dark else "light"
         self.day = day
-        border = f"2px solid {tokens.ACCENT[mode]}" if is_today \
-            else f"1px solid {tokens.NEUTRAL[mode]['stroke']}"
-        bg = tokens.ACCENT[mode] + "26" if is_today else tokens.NEUTRAL[mode]["layer1"]
         self.setObjectName("dayCell")
+        num_color = "#e0443c" if is_today else tokens.NEUTRAL[mode]["text1"]
+        bg = tokens.NEUTRAL[mode]["layer2"] if selected else "transparent"
+        border = (f"1px solid {tokens.NEUTRAL[mode]['stroke']}" if selected
+                  else "none")
         self.setStyleSheet(
             f"QFrame#dayCell {{ background: {bg}; border: {border};"
-            f" border-radius: 8px; }}")
+            f" border-radius: 8px; }}"
+            f"QFrame#dayCell:hover {{ background: {tokens.NEUTRAL[mode]['layer2']}; }}")
         self.setToolTip(tip)
+        self.setCursor(Qt.PointingHandCursor)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(8, 5, 8, 5)
-        lay.setSpacing(1)
+        lay.setContentsMargins(4, 6, 4, 4)
+        lay.setSpacing(2)
 
-        # 第一行：休/班角标 + 公历日（左）+ 节日/农历（右）
-        top = QHBoxLayout()
-        top.setSpacing(4)
+        num_row = QHBoxLayout()
+        num_row.setSpacing(2)
         if holiday:
-            pill = CaptionLabel("休" if holiday == "off" else "班")
-            if holiday == "off":
-                pill.setStyleSheet(
-                    f"background: {tokens.SEMANTIC[mode]['danger']}; color: white;"
-                    f" border-radius: 4px; padding: 0px 4px; font-weight: 600;")
-            else:
-                pill.setStyleSheet(
-                    f"background: {tokens.NEUTRAL[mode]['layer2']};"
-                    f" color: {tokens.NEUTRAL[mode]['text2']};"
-                    f" border-radius: 4px; padding: 0px 4px;")
-            top.addWidget(pill)
+            hol = CaptionLabel("休" if holiday == "off" else "班")
+            hol.setStyleSheet(
+                "color: " + (tokens.SEMANTIC[mode]["danger"] if holiday == "off"
+                             else tokens.SEMANTIC[mode]["warning"]) + ";")
+            num_row.addWidget(hol, 0, Qt.AlignTop)
         num = StrongBodyLabel(str(day))
-        top.addWidget(num)
-        top.addStretch(1)
-        side_text = festival or lunar_text
-        side_color = tokens.SEMANTIC[mode]["danger"] if festival \
-            else tokens.NEUTRAL[mode]["text3"]
-        side = CaptionLabel(side_text)
-        side.setStyleSheet(f"color: {side_color};")
-        top.addWidget(side)
-        lay.addLayout(top)
+        num.setStyleSheet(f"color: {num_color}; font-size: 17pt; font-weight: 600;")
+        num.setAlignment(Qt.AlignCenter)
+        num_row.addWidget(num, 0, Qt.AlignCenter)
+        num_row.addStretch(1)
+        lay.addLayout(num_row)
 
-        # 第二行：当日有安排时显示首条摘要 + 数量
-        if course_count or event_count:
-            bits = []
-            if course_count:
-                bits.append(f"{course_count} 节课")
-            if event_count:
-                bits.append(f"{event_count} 项日程")
-            summary = CaptionLabel(" · ".join(bits))
-            summary.setStyleSheet(f"color: {tokens.NEUTRAL[mode]['text2']};")
-            lay.addWidget(summary)
-
-        # 第三行：色点（课程 hue 点 + 日程红点）
-        if course_hues or event_count:
-            dots = QHBoxLayout()
-            dots.setSpacing(3)
-            for hue in list(course_hues)[:5]:
-                d = QFrame()
-                d.setFixedSize(7, 7)
-                d.setStyleSheet(f"background: hsl({hue}, 45%, 55%); border-radius: 3px;")
-                dots.addWidget(d)
-            if event_count:
-                d = QFrame()
-                d.setFixedSize(7, 7)
-                d.setStyleSheet(
-                    f"background: {tokens.SEMANTIC[mode]['danger']}; border-radius: 3px;")
-                dots.addWidget(d)
-            dots.addStretch(1)
-            lay.addLayout(dots)
+        if side_text:
+            side_color = {
+                "red": "#e0443c" if not dark else "#ff6b5e",
+                "strong": tokens.NEUTRAL[mode]["text1"],
+                "gray": tokens.NEUTRAL[mode]["text3"],
+            }[side_kind]
+            side = CaptionLabel(side_text)
+            side.setAlignment(Qt.AlignCenter)
+            if side_kind != "gray":
+                side.setStyleSheet(f"color: {side_color}; font-weight: 600;")
+            else:
+                side.setStyleSheet(f"color: {side_color};")
+            lay.addWidget(side)
         lay.addStretch(1)
+
+        if selected:
+            indicator = QFrame()
+            indicator.setFixedSize(20, 3)
+            indicator.setStyleSheet(
+                f"background: {tokens.NEUTRAL[mode]['text2']}; border-radius: 1px;")
+            ind_lay = QHBoxLayout()
+            ind_lay.setContentsMargins(0, 0, 0, 0)
+            ind_lay.addWidget(indicator, 0, Qt.AlignHCenter)
+            lay.addLayout(ind_lay)
 
 
 class CalendarPage(QWidget):
@@ -105,103 +96,136 @@ class CalendarPage(QWidget):
         self.icon_ = FIF.DATE_TIME
         self.title = "月历"
         self._cursor = dt.date.today().replace(day=1)
+        self._selected = dt.date.today()
         self._build()
         self.refresh()
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(tokens.SPACE["xl"], tokens.SPACE["l"],
+        root.setContentsMargins(tokens.SPACE["xl"], tokens.SPACE["s"],
                                 tokens.SPACE["xl"], tokens.SPACE["m"])
-        root.setSpacing(tokens.SPACE["m"])
+        root.setSpacing(tokens.SPACE["s"])
 
-        bar = QHBoxLayout()
-        title_lay = QVBoxLayout()
+        head = QHBoxLayout()
+        title_lay = QHBoxLayout()
         title_lay.setSpacing(2)
-        self.title_label = SubtitleLabel("")
-        self.month_hint = CaptionLabel("")
-        title_lay.addWidget(self.title_label)
-        title_lay.addWidget(self.month_hint)
-        bar.addLayout(title_lay)
-        bar.addStretch(1)
+        self.year_label = StrongBodyLabel(str(self._cursor.year))
+        self.year_label.setStyleSheet("font-size: 22pt; font-weight: 600;")
+        self.slash = StrongBodyLabel("/")
+        self.slash.setStyleSheet("font-size: 22pt; font-weight: 600;")
+        self.month_label = StrongBodyLabel(f"{self._cursor.month:02d}")
+        self.month_label.setStyleSheet(
+            "font-size: 22pt; font-weight: 600; color: #e0443c;")
+        title_lay.addWidget(self.year_label)
+        title_lay.addWidget(self.slash)
+        title_lay.addWidget(self.month_label)
+        title_lay.addStretch(1)
+        head.addLayout(title_lay)
+        head.addStretch(1)
         prev = PushButton("上月")
         prev.clicked.connect(lambda: self._shift(-1))
         nxt = PushButton("下月")
         nxt.clicked.connect(lambda: self._shift(1))
         today_btn = PrimaryPushButton("本月")
         today_btn.clicked.connect(self._back_today)
-        bar.addWidget(prev)
-        bar.addWidget(nxt)
-        bar.addWidget(today_btn)
-        root.addLayout(bar)
+        head.addWidget(prev)
+        head.addWidget(nxt)
+        head.addWidget(today_btn)
+        root.addLayout(head)
 
-        # 周表头（周末列标橙）
         head_holder = QWidget()
         self.head_lay = QGridLayout(head_holder)
-        self.head_lay.setSpacing(tokens.SPACE["xs"])
+        self.head_lay.setSpacing(4)
         root.addWidget(head_holder)
 
         grid_holder = QWidget()
         self.grid = QGridLayout(grid_holder)
-        self.grid.setSpacing(tokens.SPACE["xs"])
+        self.grid.setSpacing(4)
         root.addWidget(grid_holder, 1)
-        self._cells = []
+        for r in range(1, 7):
+            self.grid.setRowStretch(r, 1)
+        root.addSpacing(tokens.SPACE["s"])
+
+        self.detail_label = CaptionLabel("")
+        self.detail_label.setStyleSheet("font-size: 13pt;")
+        detail_row = QHBoxLayout()
+        detail_row.setSpacing(tokens.SPACE["m"])
+        detail_row.addWidget(self.detail_label, 1)
+        self.btn_today_fab = PrimaryPushButton("今")
+        self.btn_today_fab.setFixedSize(36, 36)
+        self.btn_today_fab.clicked.connect(self._back_today)
+        self.btn_add_fab = PrimaryPushButton("+")
+        self.btn_add_fab.setFixedSize(36, 36)
+        self.btn_add_fab.setStyleSheet(
+            "PrimaryPushButton { background: #d64541; border-radius: 18px;"
+            " font-size: 16pt; font-weight: 600; }")
+        self.btn_add_fab.clicked.connect(self._add_event)
+        detail_row.addWidget(self.btn_today_fab)
+        detail_row.addWidget(self.btn_add_fab)
+        root.addLayout(detail_row)
+
+        self.day_list_lay = QVBoxLayout()
+        self.day_list_lay.setSpacing(tokens.SPACE["s"])
+        day_holder = QWidget()
+        day_holder.setLayout(self.day_list_lay)
+        scroll = QScrollArea()
+        scroll.setWidget(day_holder)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFixedHeight(170)
+        root.addWidget(scroll)
 
     def refresh(self):
         dark = isDarkTheme()
         mode = "dark" if dark else "light"
         y, m = self._cursor.year, self._cursor.month
-        self.title_label.setText(f"{y} 年 {m} 月")
-        now = dt.date.today()
-        self.month_hint.setText(
-            f"今天 {now.month}月{now.day}日 · 第 {max(reminder.current_week(now, db.get_setting('first_monday', reminder.DEFAULT_FIRST_MONDAY)), 0) or '—'} 周"
-            if reminder.current_week(now, db.get_setting('first_monday', reminder.DEFAULT_FIRST_MONDAY)) >= 1
-            else "假期中")
+        self.year_label.setText(str(y))
+        self.month_label.setText(f"{m:02d}")
 
-        # 清空周表头与格子
         while self.head_lay.count():
             item = self.head_lay.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        for c, name in enumerate(WEEKDAY_CN):
+            weekend = c in (0, 6)
+            h = StrongBodyLabel(name)
+            h.setAlignment(Qt.AlignCenter)
+            if weekend:
+                h.setStyleSheet("color: #e0443c;")
+            self.head_lay.addWidget(h, 0, c)
+
+        first_monday = db.get_setting("first_monday", reminder.DEFAULT_FIRST_MONDAY)
+        courses = db.list_courses()
+        events = db.list_events()
+        cal = calendar.Calendar(firstweekday=6).monthdatescalendar(y, m)
+        today = dt.date.today()
+
         while self.grid.count():
             item = self.grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         self._cells = []
 
-        for c, name in enumerate(WEEKDAY_CN):
-            weekend = c >= 5
-            h = StrongBodyLabel(name)
-            h.setAlignment(Qt.AlignCenter)
-            if weekend:
-                h.setStyleSheet(
-                    f"color: {tokens.SEMANTIC[mode]['warning']};")
-            self.head_lay.addWidget(h, 0, c)
+        from app.core import holidays as _hol
 
-        first_monday = db.get_setting("first_monday", reminder.DEFAULT_FIRST_MONDAY)
-        courses = db.list_courses()
-        events = db.list_events()
-        cal = calendar.Calendar(firstweekday=0).monthdatescalendar(y, m)
-        today = dt.date.today()
-
-        for r, week in enumerate(cal, start=1):
+        for r, week in enumerate(cal, start=0):
             for c, day in enumerate(week):
                 in_month = day.month == m
                 if not in_month:
                     self.grid.addWidget(QLabel(""), r, c)
                     continue
 
-                # 当日课程与日程
                 entries = schedule_query.today_courses(
                     dt.datetime(day.year, day.month, day.day, 23, 59),
                     courses, first_monday)
                 hues = []
                 for e in entries:
-                    digest = __import__("hashlib").md5(e["name"].encode("utf-8")).hexdigest()
+                    digest = __import__("hashlib").md5(
+                        e["name"].encode("utf-8")).hexdigest()
                     hues.append(int(digest[:4], 16) % 360)
                 day_events = [e for e in events if e["date"] == day.isoformat()]
 
-                # 悬停详情（替代双击）
-                lines = [f"{day.month}月{day.day}日（周{WEEKDAY_CN[day.isoweekday() - 1]}）"]
+                lines = [f"{day.month}月{day.day}日（周{WEEKDAY_CN[day.isoweekday() % 7]}）"]
                 for e in entries:
                     lines.append(f"· {e['start']} {e['name']}"
                                  + (f"（{e['room']}）" if e["room"] else ""))
@@ -212,7 +236,6 @@ class CalendarPage(QWidget):
                     lines.append("当日无安排")
                 tip = "\n".join(lines)
 
-                # 农历/节日（节日当天以节日名替代农历日）
                 try:
                     _ly, lm, ld, leap = lunar.solar_to_lunar(day)
                     festival = lunar.festival_name(day)
@@ -220,15 +243,92 @@ class CalendarPage(QWidget):
                 except ValueError:
                     festival, lunar_text = "", ""
 
-                from app.core import holidays as _hol
-                cell = DayCell(day.day,
-                               lunar_text,
-                               festival,
-                               _hol.status(day),
-                               hues, len(entries), len(day_events),
-                               day == today, dark, tip)
+                if festival:
+                    side_text = festival
+                    side_kind = "red" if festival in RED_FESTIVALS else "strong"
+                elif lunar_text == "初一":
+                    side_text, side_kind = lunar.lunar_month_str(lm, leap), "gray"
+                else:
+                    side_text, side_kind = lunar_text, "gray"
+
+                cell = DayCell(day.day, side_text, side_kind,
+                               _hol.status(day), day == today,
+                               day == self._selected, dark, tip)
+                cell.mousePressEvent = lambda ev, dd=day: self._select(dd)
                 self.grid.addWidget(cell, r, c)
                 self._cells.append(cell)
+
+        self._render_detail()
+
+    def _select(self, day):
+        self._selected = day
+        self.refresh()
+
+    def _render_detail(self):
+        day = self._selected
+        days_after = (day - dt.date.today()).days
+        self.detail_label.setText(lunar.day_detail_line(day, days_after))
+
+        while self.day_list_lay.count():
+            item = self.day_list_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        dark = isDarkTheme()
+        mode = "dark" if dark else "light"
+        first_monday = db.get_setting("first_monday", reminder.DEFAULT_FIRST_MONDAY)
+        entries = schedule_query.today_courses(
+            dt.datetime(day.year, day.month, day.day, 23, 59),
+            db.list_courses(), first_monday)
+        day_events = [e for e in db.list_events() if e["date"] == day.isoformat()]
+
+        if not entries and not day_events:
+            empty = BodyLabel("无日程")
+            empty.setAlignment(Qt.AlignCenter)
+            empty.setStyleSheet("color: " + tokens.NEUTRAL[mode]["text3"]
+                                + "; font-size: 14pt;")
+            self.day_list_lay.addWidget(empty)
+            self.day_list_lay.addStretch(1)
+            return
+
+        for e in entries:
+            state = {"current": "进行中", "done": "已结束",
+                     "upcoming": "未开始"}[e["state"]]
+            row = CardWidget(self)
+            bg, fg, bar = tokens.course_color(e["name"], mode)
+            if e["state"] == "done":
+                bg = tokens.NEUTRAL[mode]["layer2"]
+                fg = tokens.NEUTRAL[mode]["text3"]
+            row.setStyleSheet(
+                f"CardWidget {{ background: {bg}; border-left: 3px solid {bar};"
+                f" border-radius: 8px; }}")
+            lay = QHBoxLayout(row)
+            lay.setContentsMargins(tokens.SPACE["l"], tokens.SPACE["s"],
+                                   tokens.SPACE["s"], tokens.SPACE["s"])
+            t = StrongBodyLabel(f"{e['start']}  {e['name']}")
+            t.setStyleSheet(f"color: {fg};")
+            m2 = CaptionLabel(f"{state} · {e['sec']}节"
+                              + (f" · {e['room']}" if e["room"] else ""))
+            m2.setStyleSheet(f"color: {fg};")
+            lay.addWidget(t)
+            lay.addStretch(1)
+            lay.addWidget(m2)
+            self.day_list_lay.addWidget(row)
+        for e in day_events:
+            row = CardWidget(self)
+            row.setStyleSheet(
+                f"CardWidget {{ background: {tokens.NEUTRAL[mode]['layer1']};"
+                f" border-left: 3px solid {tokens.SEMANTIC[mode]['danger']};"
+                f" border-radius: 8px; }}")
+            lay = QHBoxLayout(row)
+            lay.setContentsMargins(tokens.SPACE["l"], tokens.SPACE["s"],
+                                   tokens.SPACE["s"], tokens.SPACE["s"])
+            t = BodyLabel(f"{e['time'] or '全天'}  {e['title']}"
+                          + (f"（{e['note']}）" if e["note"] else ""))
+            lay.addWidget(t)
+            lay.addStretch(1)
+            self.day_list_lay.addWidget(row)
+        self.day_list_lay.addStretch(1)
 
     def _shift(self, delta):
         y, m = self._cursor.year, self._cursor.month + delta
@@ -237,12 +337,21 @@ class CalendarPage(QWidget):
         elif m == 13:
             y, m = y + 1, 1
         self._cursor = dt.date(y, m, 1)
+        self._selected = dt.date(y, m, min(self._selected.day, 28))
         self.refresh()
 
     def _back_today(self):
         self._cursor = dt.date.today().replace(day=1)
+        self._selected = dt.date.today()
         self.refresh()
+
+    def _add_event(self):
+        dlg = EventDialog(self.window(), default_date=self._selected)
+        if dlg.exec() and not dlg.deleted:
+            d = dlg.result_data()
+            db.add_event(d["title"], d["date"], d["time"], d["remind_minutes"],
+                         d["note"], d["priority"])
+            self.refresh()
 
     def ensure_built(self):
         pass
-

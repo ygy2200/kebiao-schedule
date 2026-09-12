@@ -43,7 +43,46 @@ LUNAR_FESTIVALS = {  # (月, 日, 是否闰月) -> 节日
     (8, 15): "中秋节", (9, 9): "重阳节", (12, 8): "腊八节",
 }
 SOLAR_FESTIVALS = {(1, 1): "元旦", (5, 1): "劳动节", (6, 1): "儿童节",
-                   (10, 1): "国庆节"}
+                   (7, 1): "建党节", (8, 1): "建军节", (9, 3): "抗战胜利纪念日",
+                   (9, 10): "教师节", (9, 18): "九一八事变",
+                   (9, 30): "烈士纪念日", (10, 1): "国庆节", (12, 13): "国家公祭日"}
+
+# 21 世纪节气（寿星公式 C 值）：[(月, 日, C 值, 节气名)]
+SOLAR_TERMS_21C = [
+    (1, 5.4055, "小寒"), (1, 20.12, "大寒"),
+    (2, 3.87, "立春"), (2, 18.73, "雨水"),
+    (3, 5.63, "惊蛰"), (3, 20.646, "春分"),
+    (4, 4.81, "清明"), (4, 20.1, "谷雨"),
+    (5, 5.52, "立夏"), (5, 21.04, "小满"),
+    (6, 5.678, "芒种"), (6, 21.37, "夏至"),
+    (7, 7.108, "小暑"), (7, 22.83, "大暑"),
+    (8, 7.5, "立秋"), (8, 23.13, "处暑"),
+    (9, 7.646, "白露"), (9, 23.042, "秋分"),
+    (10, 8.318, "寒露"), (10, 23.438, "霜降"),
+    (11, 7.438, "立冬"), (11, 22.36, "小雪"),
+    (12, 7.18, "大雪"), (12, 21.94, "冬至"),
+]
+
+# 干支
+HEAVENLY_STEMS = "甲乙丙丁戊己庚辛壬癸"
+EARTHLY_BRANCHES = "子丑寅卯辰巳午未申酉戌亥"
+ZODIAC = "鼠牛虎兔龙蛇马羊猴鸡狗猪"
+
+
+def solar_term(date):
+    """节气名（寿星公式，21 世纪精度 ±1 天内），非节气日返回 None。"""
+    y = date.year
+    if not 2001 <= y <= 2100:
+        return None
+    yy = y % 100
+    leap_count = (yy - 1) // 4
+    for month, c, name in SOLAR_TERMS_21C:
+        if month != date.month:
+            continue
+        day = int(yy * 0.2422 + c) - leap_count
+        if day == date.day:
+            return name
+    return None
 
 
 def _leap_month(year):
@@ -129,6 +168,10 @@ def festival_name(date):
         name = LUNAR_FESTIVALS.get((m, d))
         if name:
             return name
+    # 节气（秋分 = 中国农民丰收节）
+    term = solar_term(date)
+    if term:
+        return "丰收节" if term == "秋分" else term
     return ""
 
 
@@ -142,3 +185,57 @@ def date_line(date):
     if fest:
         parts.append(fest)
     return "  ".join(parts)
+
+
+# ---------- 干支（月历详情行用） ----------
+
+def _jdn(date):
+    """儒略日数（正午法）。"""
+    a = (14 - date.month) // 12
+    y = date.year + 4800 - a
+    m = date.month + 12 * a - 3
+    return date.day + (153 * m + 2) // 5 + 365 * y + y // 4 - y // 100 + y // 400 - 32045
+
+
+def ganzhi_day(date):
+    """干支日（如"壬寅"）。以 2026-09-12=壬寅（系统日历）校准。"""
+    idx = (_jdn(date) + 49) % 60
+    return HEAVENLY_STEMS[idx % 10] + EARTHLY_BRANCHES[idx % 12]
+
+
+def ganzhi_year(lunar_year):
+    """农历年干支（如"丙午"）与生肖（如"马"）。以 2026=丙午 校准。"""
+    stem = HEAVENLY_STEMS[(lunar_year - 4) % 10]
+    branch_idx = (lunar_year - 4) % 12
+    return stem + EARTHLY_BRANCHES[branch_idx], ZODIAC[branch_idx]
+
+
+def ganzhi_month(lunar_year, lunar_month):
+    """农历月干支（如八月="丁酉"）：地支正月起寅，天干由年干按五虎遁推。"""
+    branch = EARTHLY_BRANCHES[(lunar_month + 1) % 12]  # 正月=寅
+    year_stem_idx = (lunar_year - 4) % 10
+    first_month_stem = (year_stem_idx % 5) * 2 + 2  # 甲己→丙(2)起寅；乙庚→戊；丙辛→庚…
+    stem_idx = (first_month_stem + lunar_month - 1) % 10
+    return HEAVENLY_STEMS[stem_idx] + branch
+
+
+def day_detail_line(date, days_after=None):
+    """月历底部详情行（对齐系统日历）：
+    '13天后 八月十五 丙午年 [马] 丁酉月 壬寅日'。days_after=None 则无前后缀。"""
+    y, m, d, leap = solar_to_lunar(date)
+    gy, zodiac = ganzhi_year(y)
+    gm = ganzhi_month(y, m)
+    gd = ganzhi_day(date)
+    if days_after is None:
+        prefix = ""
+    elif days_after == 0:
+        prefix = "今天 "
+    elif days_after == 1:
+        prefix = "明天 "
+    elif days_after > 1:
+        prefix = f"{days_after}天后 "
+    elif days_after == -1:
+        prefix = "昨天 "
+    else:
+        prefix = f"{-days_after}天前 "
+    return f"{prefix}{lunar_month_str(m, leap)}{lunar_day_str(d)} {gy}年 [{zodiac}] {gm}月 {gd}日"
