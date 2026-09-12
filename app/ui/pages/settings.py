@@ -137,6 +137,19 @@ class SettingsPage(ScrollArea):
         g4.addSettingCard(self.wx_test_card)
         lay.addWidget(g4)
 
+        # —— 节假日数据 ——
+        g45 = SettingCardGroup("法定节假日数据", self._content)
+        from app.core import holidays as _hol
+        _exists, _at = _hol.cache_info()
+        _years = "、".join(sorted(_hol.load().keys())) or "2026（内置）"
+        self.holiday_card = PushSettingCard(
+            "立即更新", FIF.SYNC, "联网更新法定节假日（休 / 班）",
+            f"数据源：holiday-cn 开源库 · 覆盖：{_years} 年 · "
+            + (f"上次更新：{_at[:10]}" if _at else "使用内置数据"), self._content)
+        self.holiday_card.clicked.connect(self._refresh_holidays)
+        g45.addSettingCard(self.holiday_card)
+        lay.addWidget(g45)
+
         # —— 启动与数据 ——
         g5 = SettingCardGroup("启动与数据", self._content)
         self.autostart_card = _SwitchCard("开机自动启动", "写注册表 HKCU Run 键，可随时关闭",
@@ -211,6 +224,18 @@ class SettingsPage(ScrollArea):
         autostart.set_enabled(bool(on))
         if on:
             InfoBar.success("已开启", "写入注册表 HKCU Run 键，取消勾选即回滚", parent=self)
+
+    def _refresh_holidays(self):
+        from app.core import holidays as _hol
+        got, err = _hol.refresh(force=True)
+        _exists, _at = _hol.cache_info()
+        if got:
+            self.holiday_card.setContent(
+                f"已更新 {('、'.join(str(g) for g in got))} 年 · 上次更新：{_at[:10]}")
+            InfoBar.success("节假日数据已更新", "、".join(str(g) for g in got) + " 年",
+                            parent=self)
+        else:
+            InfoBar.warning("更新失败", f"已使用内置 / 缓存数据（{err[:40]}）", parent=self)
 
     def _open_data(self):
         subprocess.Popen(["explorer", "/select,", db.DB_PATH])

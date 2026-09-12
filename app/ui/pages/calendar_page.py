@@ -21,10 +21,10 @@ WEEKDAY_CN = ["一", "二", "三", "四", "五", "六", "日"]
 
 
 class DayCell(QFrame):
-    """月历单格：公历日 + 农历/节日 + 课程与日程点（悬停显示当日详情）。"""
+    """月历单格：公历日 + 农历/节日 + 休班角标 + 课程与日程点（悬停显示当日详情）。"""
 
-    def __init__(self, day, lunar_text, festival, course_hues, course_count,
-                 event_count, is_today, dark, tip, parent=None):
+    def __init__(self, day, lunar_text, festival, holiday, course_hues,
+                 course_count, event_count, is_today, dark, tip, parent=None):
         super().__init__(parent)
         mode = "dark" if dark else "light"
         self.day = day
@@ -41,9 +41,21 @@ class DayCell(QFrame):
         lay.setContentsMargins(8, 5, 8, 5)
         lay.setSpacing(1)
 
-        # 第一行：公历日（左）+ 节日/农历（右）
+        # 第一行：休/班角标 + 公历日（左）+ 节日/农历（右）
         top = QHBoxLayout()
         top.setSpacing(4)
+        if holiday:
+            pill = CaptionLabel("休" if holiday == "off" else "班")
+            if holiday == "off":
+                pill.setStyleSheet(
+                    f"background: {tokens.SEMANTIC[mode]['danger']}; color: white;"
+                    f" border-radius: 4px; padding: 0px 4px; font-weight: 600;")
+            else:
+                pill.setStyleSheet(
+                    f"background: {tokens.NEUTRAL[mode]['layer2']};"
+                    f" color: {tokens.NEUTRAL[mode]['text2']};"
+                    f" border-radius: 4px; padding: 0px 4px;")
+            top.addWidget(pill)
         num = StrongBodyLabel(str(day))
         top.addWidget(num)
         top.addStretch(1)
@@ -208,9 +220,11 @@ class CalendarPage(QWidget):
                 except ValueError:
                     festival, lunar_text = "", ""
 
+                from app.core import holidays as _hol
                 cell = DayCell(day.day,
                                lunar_text,
                                festival,
+                               _hol.status(day),
                                hues, len(entries), len(day_events),
                                day == today, dark, tip)
                 self.grid.addWidget(cell, r, c)

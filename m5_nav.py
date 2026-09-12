@@ -1,6 +1,8 @@
 import sys, os
 sys.argv = ['m5nav']
 sys.path.insert(0, r"C:\Users\y\Desktop\zcode项目记录\课表日程App")
+import faulthandler
+faulthandler.dump_traceback_later(12, exit=True)
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
 app = QApplication([])

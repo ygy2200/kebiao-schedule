@@ -120,6 +120,17 @@ def main():
     timer.start()
     check_reminders(window, tray, fired)
 
+    # 法定节假日数据：启动后台静默更新（30 天缓存，失败用内置/缓存）
+    import threading
+    from app.core import holidays as _hol
+
+    def _refresh_holidays_bg():
+        try:
+            _hol.refresh()
+        except Exception:
+            pass
+    threading.Thread(target=_refresh_holidays_bg, daemon=True).start()
+
     try:
         app.styleHints().colorSchemeChanged.connect(lambda *_: (
             apply_theme(app), window.refresh()))
