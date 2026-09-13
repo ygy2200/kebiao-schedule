@@ -90,6 +90,11 @@ def main():
         return 0
 
     db.init_db()
+    try:
+        from app.core import backup as _backup
+        _backup.backup_all()  # 启动自动备份（保留最近 5 份）
+    except Exception:
+        pass
 
     from app.ui.main_window import MainWindow
     from tray import TrayIcon
@@ -107,6 +112,19 @@ def main():
     tray = TrayIcon(icon.ICON_PATH, window, on_quit=lambda: on_quit(window, tray, app))
     tray.setToolTip("课表日程助手")
     tray.show()
+    window.setup_shortcuts(tray)
+
+    # Alt+A 全局热键快速添加（失败降级：应用内 Ctrl+K 仍有"添加日程"）
+    from app.ui.quick_add import GlobalHotkeyManager, QuickAddWindow
+
+    def _on_quick_saved():
+        window.page_events.refresh()
+        from qfluentwidgets import InfoBar
+        InfoBar.success("已添加", "今日快速日程已保存", duration=2500, parent=window)
+
+    quick_add = QuickAddWindow(on_saved=_on_quick_saved)
+    hotkeys = GlobalHotkeyManager(on_trigger=quick_add.popup)
+    hotkeys.register()
 
     server.newConnection.connect(lambda: (
         (s := server.nextPendingConnection()) and (

@@ -59,10 +59,13 @@ class EventsPage(QWidget):
         bar = QHBoxLayout()
         self.btn_add = PrimaryPushButton("添加日程")
         self.btn_add.clicked.connect(self._add)
+        self.btn_ics = PushButton("导出 ICS")
+        self.btn_ics.clicked.connect(self._export_ics)
         self.btn_done = PushButton("已完成")
         self.btn_done.setCheckable(True)
         self.btn_done.toggled.connect(self.refresh)
         bar.addWidget(self.btn_add)
+        bar.addWidget(self.btn_ics)
         bar.addWidget(self.btn_done)
         bar.addStretch(1)
         root.addLayout(bar)
@@ -184,6 +187,16 @@ class EventsPage(QWidget):
         edit_btn.clicked.connect(lambda: self._edit(e["id"]))
         lay.addWidget(edit_btn)
         return card
+
+    def _export_ics(self):
+        from PySide6.QtWidgets import QFileDialog
+        from app.core.backup import export_ics
+        path, _ = QFileDialog.getSaveFileName(
+            self, "导出 ICS（可导入 Windows / 手机日历）", "日程导出.ics", "iCalendar (*.ics)")
+        if not path:
+            return
+        n = export_ics(path)
+        InfoBar.success("已导出", f"{n} 条日程 → {path}", duration=5000, parent=self)
 
     def _toggle(self, eid, on):
         db.update_event(eid, done=1 if on else 0)

@@ -156,6 +156,16 @@ class SettingsPage(ScrollArea):
                                           autostart.enabled(), self._content)
         self.autostart_card.checkedChanged.connect(self._toggle_autostart)
         g5.addSettingCard(self.autostart_card)
+        self.backup_card = PushSettingCard(
+            "立即备份", FIF.SAVE, "全量备份（JSON）",
+            "启动时自动备份，保留最近 5 份（data/backups/）", self._content)
+        self.backup_card.clicked.connect(self._do_backup)
+        g5.addSettingCard(self.backup_card)
+        self.restore_card = PushSettingCard(
+            "恢复", FIF.UPDATE, "从备份恢复",
+            "选择 backup_*.json 覆盖当前数据（恢复前自动备份）", self._content)
+        self.restore_card.clicked.connect(self._do_restore)
+        g5.addSettingCard(self.restore_card)
         self.data_card = PushSettingCard(
             "打开", FIF.FOLDER, "数据文件夹",
             f"{db.DB_PATH}（导入覆盖前自动备份）", self._content)
@@ -236,6 +246,28 @@ class SettingsPage(ScrollArea):
                             parent=self)
         else:
             InfoBar.warning("更新失败", f"已使用内置 / 缓存数据（{err[:40]}）", parent=self)
+
+    def _do_backup(self):
+        from app.core import backup
+        path = backup.backup_all()
+        InfoBar.success("备份完成", os.path.basename(path), duration=3500, parent=self)
+
+    def _do_restore(self):
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        start = os.path.join(db.DATA_DIR, "backups")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择备份文件", start, "备份 JSON (*.json)")
+        if not path:
+            return
+        if QMessageBox.question(self, "确认恢复",
+                                "恢复将覆盖当前全部课程/日程/设置（恢复前自动备份）。继续？"
+                                ) != QMessageBox.Yes:
+            return
+        from app.core import backup
+        stat = backup.restore_from(path)
+        QMessageBox.information(self, "已恢复",
+                                f"课程 {stat['courses']} 条、日程 {stat['events']} 条已恢复。"
+                                "重启应用后界面刷新。")
 
     def _open_data(self):
         subprocess.Popen(["explorer", "/select,", db.DB_PATH])

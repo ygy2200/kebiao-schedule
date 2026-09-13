@@ -24,7 +24,12 @@ class TrayIcon(QSystemTrayIcon):
         self.activated.connect(self._activated)
 
     def _activated(self, reason):
-        if reason == QSystemTrayIcon.Trigger:  # 左键单击
+        if reason == QSystemTrayIcon.Trigger:  # 左键单击：快速今日面板
+            from app.ui.tray_panel import QuickTodayPanel
+            from PySide6.QtGui import QCursor
+            panel = QuickTodayPanel(on_open_main=self.window.bring_up)
+            panel.popup_at(QCursor.pos())
+        elif reason == QSystemTrayIcon.DoubleClick:
             self.window.bring_up()
 
     @property

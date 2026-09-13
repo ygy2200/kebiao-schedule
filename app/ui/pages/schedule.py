@@ -60,6 +60,8 @@ class SchedulePage(QWidget):
         self.btn_next.clicked.connect(lambda: self._shift(1))
         self.btn_today = PushButton("本周")
         self.btn_today.clicked.connect(self._shift_back)
+        self.btn_png = PushButton("导出 PNG")
+        self.btn_png.clicked.connect(self._export_png)
         self.week_label = CaptionLabel("")
         bar.addWidget(self.btn_import)
         bar.addWidget(self.btn_add)
@@ -68,6 +70,7 @@ class SchedulePage(QWidget):
         bar.addWidget(self.week_label)
         bar.addWidget(self.btn_next)
         bar.addWidget(self.btn_today)
+        bar.addWidget(self.btn_png)
         root.addLayout(bar)
 
         self.table = QTableWidget(6, 8)
@@ -218,6 +221,17 @@ class SchedulePage(QWidget):
         return card
 
     # ---------- 动作 ----------
+
+    def _export_png(self):
+        from PySide6.QtWidgets import QFileDialog
+        from PySide6.QtCore import QBuffer
+        path, _ = QFileDialog.getSaveFileName(
+            self, "导出课表 PNG", f"课表_{self._show_week}周.png", "PNG 图片 (*.png)")
+        if not path:
+            return
+        pm = self.table.grab()
+        pm.save(path, "PNG")
+        InfoBar.success("已导出", path, duration=4000, parent=self)
 
     def _shift(self, delta):
         self.week_offset += delta

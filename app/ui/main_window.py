@@ -67,3 +67,30 @@ class MainWindow(FluentWindow):
         self.activateWindow()
         for p in self.pages.values():
             p.refresh()
+
+    # ---------- 效率层挂钩 ----------
+
+    def tray_toggle(self):
+        """托盘提醒暂停/恢复（InfoBar 反馈）。"""
+        if not getattr(self, "tray", None):
+            return
+        new_state = not self.tray.paused
+        self.tray.act_pause.setChecked(new_state)
+        from qfluentwidgets import InfoBar
+        if new_state:
+            InfoBar.warning("提醒已暂停", "托盘菜单可恢复", duration=3000, parent=self)
+        else:
+            InfoBar.success("提醒已恢复", None, duration=3000, parent=self)
+
+    def open_data_folder(self):
+        import subprocess
+        import db
+        subprocess.Popen(["explorer", "/select,", db.DB_PATH])
+
+    def setup_shortcuts(self, tray):
+        """main.py 注入 tray 后调用：Ctrl+K 命令面板等。"""
+        self.tray = tray
+        from PySide6.QtGui import QKeySequence, QShortcut
+        from app.ui.command_palette import CommandPalette
+        self._palette = CommandPalette(self)
+        QShortcut(QKeySequence("Ctrl+K"), self, activated=self._palette.popup)
