@@ -93,4 +93,12 @@ class MainWindow(FluentWindow):
         from PySide6.QtGui import QKeySequence, QShortcut
         from app.ui.command_palette import CommandPalette
         self._palette = CommandPalette(self)
-        QShortcut(QKeySequence("Ctrl+K"), self, activated=self._palette.popup)
+        sc = QShortcut(QKeySequence("Ctrl+K"), self)
+        sc.activated.connect(self._palette.popup)
+        # Ctrl+N 快速添加日程（选中日）；Ctrl+1-4 切页
+        QShortcut(QKeySequence("Ctrl+N"), self,
+                  activated=self.pages["page_events"]._add)
+        for i, name in enumerate(["page_today", "page_schedule", "page_calendar",
+                                  "page_events"], start=1):
+            QShortcut(QKeySequence(f"Ctrl+{i}"), self,
+                      activated=lambda name=name: self.switchTo(self.pages[name]))

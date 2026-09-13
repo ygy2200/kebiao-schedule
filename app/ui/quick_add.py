@@ -97,10 +97,12 @@ class GlobalHotkeyManager:
         self.bridge.triggered.connect(on_trigger)
         self.ok = False
 
+    HOTKEY = "ctrl+alt+a"  # 默认 Ctrl+Alt+A（Alt+A 与大量软件冲突）
+
     def register(self):
         try:
             import keyboard
-            keyboard.add_hotkey("alt+a", lambda: self.bridge.triggered.emit(),
+            keyboard.add_hotkey(self.HOTKEY, lambda: self.bridge.triggered.emit(),
                                 suppress=False)
             self.ok = True
         except Exception:

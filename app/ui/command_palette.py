@@ -4,8 +4,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from PySide6.QtWidgets import QListWidgetItem
-from qfluentwidgets import (FluentIcon as FIF, LineEdit, ListWidget,
-                            SubtitleLabel)
+from qfluentwidgets import (BodyLabel, CaptionLabel, FluentIcon as FIF,
+                            LineEdit, ListWidget, SubtitleLabel)
 
 import db
 
@@ -48,8 +48,12 @@ class CommandPalette(QWidget):
         self.listw.itemActivated.connect(self._run_item)
         self.listw.itemClicked.connect(self._run_item)
         lay.addWidget(self.listw)
+        hint = CaptionLabel("快捷键：Ctrl+K 命令面板 · Ctrl+N 快速添加日程 · "
+                            "Ctrl+1/2/3/4 切换页面 · 全局 Ctrl+Alt+A 快速记事")
+        hint.setStyleSheet("color: #6a6a72; font-size: 10pt;")
+        lay.addWidget(hint)
 
-        self.setFixedSize(520, 420)
+        self.setFixedSize(520, 448)
 
     def popup(self):
         """收集动作 + 显示。"""
@@ -65,7 +69,7 @@ class CommandPalette(QWidget):
             (FIF.ADD, "动作：添加日程（今天）",
              lambda: (w.switchTo(w.pages["page_events"]),
                       w.pages["page_events"]._add())),
-            (FIF.IMPORT, "动作：导入课表 xlsx",
+            (FIF.DOWNLOAD, "动作：导入课表 xlsx",
              lambda: (w.switchTo(w.pages["page_schedule"]),
                       w.pages["page_schedule"].import_xlsx())),
             (FIF.PAUSE, "动作：暂停 / 恢复提醒", w.tray_toggle),
@@ -92,10 +96,14 @@ class CommandPalette(QWidget):
     def _filter(self, text):
         text = text.strip().lower()
         self.listw.clear()
+        from qfluentwidgets import FluentIconBase
         for icon, title, fn in self.actions:
             if text and text not in title.lower():
                 continue
-            it = ListWidgetItem(icon, title)
+            if isinstance(icon, FluentIconBase):
+                it = QListWidgetItem(icon.icon(), title)
+            else:
+                it = QListWidgetItem(icon, title)
             it.setData(Qt.UserRole, title)
             self.listw.addItem(it)
         if self.listw.count():
