@@ -17,8 +17,13 @@ class TrayIcon(QSystemTrayIcon):
         act_quit.triggered.connect(on_quit)
         menu.addAction(act_open)
         menu.addAction(self.act_pause)
+        self.act_quick = QAction("快速添加日程", menu)
+        self.act_quick.setVisible(False)
+        self.act_quick.triggered.connect(self._quick_add)
+        menu.addAction(self.act_quick)
         menu.addSeparator()
         menu.addAction(act_quit)
+        self._quick_add_fn = None
         menu.setStyleSheet(menu.styleSheet())
         self.setContextMenu(menu)
         self.activated.connect(self._activated)
@@ -31,6 +36,15 @@ class TrayIcon(QSystemTrayIcon):
             panel.popup_at(QCursor.pos())
         elif reason == QSystemTrayIcon.DoubleClick:
             self.window.bring_up()
+
+    def set_quick_add(self, fn):
+        """注入快速添加迷你窗的弹出函数并显示菜单项。"""
+        self._quick_add_fn = fn
+        self.act_quick.setVisible(fn is not None)
+
+    def _quick_add(self):
+        if self._quick_add_fn:
+            self._quick_add_fn()
 
     @property
     def paused(self):

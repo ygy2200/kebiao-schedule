@@ -49,7 +49,7 @@ class CommandPalette(QWidget):
         self.listw.itemClicked.connect(self._run_item)
         lay.addWidget(self.listw)
         hint = CaptionLabel("快捷键：Ctrl+K 命令面板 · Ctrl+N 快速添加日程 · "
-                            "Ctrl+1/2/3/4 切换页面 · 全局 Ctrl+Alt+A 快速记事")
+                            "Ctrl+1/2/3/4 切换页面")
         hint.setStyleSheet("color: #6a6a72; font-size: 10pt;")
         lay.addWidget(hint)
 

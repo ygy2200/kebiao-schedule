@@ -114,8 +114,9 @@ def main():
     tray.show()
     window.setup_shortcuts(tray)
 
-    # Alt+A 全局热键快速添加（失败降级：应用内 Ctrl+K 仍有"添加日程"）
-    from app.ui.quick_add import GlobalHotkeyManager, QuickAddWindow
+    # 快速添加迷你窗：由托盘菜单触发（不再挂全局键盘钩子——避免系统级
+    # 钩子常驻；用户确认不需要全局热键）
+    from app.ui.quick_add import QuickAddWindow
 
     def _on_quick_saved():
         window.page_events.refresh()
@@ -123,8 +124,7 @@ def main():
         InfoBar.success("已添加", "今日快速日程已保存", duration=2500, parent=window)
 
     quick_add = QuickAddWindow(on_saved=_on_quick_saved)
-    hotkeys = GlobalHotkeyManager(on_trigger=quick_add.popup)
-    hotkeys.register()
+    tray.set_quick_add(quick_add.popup)
 
     server.newConnection.connect(lambda: (
         (s := server.nextPendingConnection()) and (
