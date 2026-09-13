@@ -149,10 +149,73 @@ def test_lunar():
     print("test_lunar OK", "| 2026-09-07 =", s)
 
 
+def test_schedule_query():
+    """今日时间线三态（app/core/schedule_query.today_courses，显式传参不碰正式库）"""
+    import datetime as dt
+    import reminder
+    from app.core.schedule_query import today_courses
+
+    c = {"name": "三态课", "weekday": 1, "sec_start": 8, "sec_end": 8,
+         "weeks": "1-16", "room": "T101", "note": "", "enabled": 1}
+    fm, mapping = "2026-09-07", reminder.DEFAULT_SECTION_TIMES  # 8节=16:00，45min → 16:00-16:45
+
+    def state(hhmm):
+        h, m = map(int, hhmm.split(":"))
+        r = today_courses(dt.datetime(2026, 9, 7, h, m), [c], fm, mapping)
+        return r[0]["state"]
+
+    assert state("15:59") == "upcoming"
+    assert state("16:00") == "current"   # 整点开始边界 = current
+    assert state("16:20") == "current"
+    assert state("16:45") == "done"      # 结束边界 = done
+    assert state("17:50") == "done"
+    # 周次过滤：2026-12-28 为第 17 周，不在 1-16
+    r = today_courses(dt.datetime(2026, 12, 28, 16, 20), [c], fm, mapping)
+    assert r == []
+    print("test_schedule_query OK")
+
+
+def test_holidays():
+    """法定节假日三态（内置 2026 兜底；tempdir 隔离缓存只走 BUILTIN）"""
+    import datetime as dt
+    import tempfile
+    from app.core import holidays
+
+    db.DATA_DIR = tempfile.mkdtemp(prefix="kebiao_test_holidays_")
+    assert holidays.status(dt.date(2026, 9, 25)) == "off"   # 中秋假期
+    assert holidays.status(dt.date(2026, 9, 20)) == "work"  # 国庆调休
+    assert holidays.status(dt.date(2026, 9, 15)) is None    # 普通日
+    assert holidays.status("2026-10-01") == "off"           # ISO 字符串入参
+    assert holidays.status(dt.date(2025, 5, 1)) is None     # 无数据年份
+    print("test_holidays OK")
+
+
+def test_ganzhi():
+    """节气/丰收节/干支（月历详情行用；干支经 2000-01-01=戊午 独立锚点验证）"""
+    import datetime as dt
+    import lunar
+
+    assert lunar.solar_term(dt.date(2026, 9, 7)) == "白露"
+    assert lunar.festival_name(dt.date(2026, 9, 23)) == "丰收节"  # 秋分
+    # 2026-09-25=壬寅（与系统日历一致）；9-12 为 13 天前 = 己丑
+    assert lunar.ganzhi_day(dt.date(2026, 9, 25)) == "壬寅"
+    assert lunar.ganzhi_day(dt.date(2026, 9, 12)) == "己丑"
+    assert lunar.ganzhi_year(2026) == ("丙午", "马")
+    assert lunar.ganzhi_month(2026, 8) == "丁酉"
+    assert lunar.day_detail_line(dt.date(2026, 9, 25), days_after=13) == \
+        "13天后 八月十五 丙午年 [马] 丁酉月 壬寅日"
+    assert lunar.day_detail_line(dt.date(2026, 9, 12), days_after=0) == \
+        "今天 八月初二 丙午年 [马] 丁酉月 己丑日"
+    print("test_ganzhi OK")
+
+
 if __name__ == "__main__":
     test_importer()
     test_weeks_utils()
     test_db()
     test_reminder()
     test_lunar()
+    test_schedule_query()
+    test_holidays()
+    test_ganzhi()
     print("ALL TESTS PASSED")

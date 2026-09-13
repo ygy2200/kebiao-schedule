@@ -198,7 +198,7 @@ def _jdn(date):
 
 
 def ganzhi_day(date):
-    """干支日（如"壬寅"）。以 2026-09-12=壬寅（系统日历）校准。"""
+    """干支日（如"壬寅"）。以 2026-09-25=壬寅（系统日历）校准。"""
     idx = (_jdn(date) + 49) % 60
     return HEAVENLY_STEMS[idx % 10] + EARTHLY_BRANCHES[idx % 12]
 
