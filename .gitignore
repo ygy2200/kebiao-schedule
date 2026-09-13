@@ -30,3 +30,8 @@ rev_exe.png
 # 复盘连拍（精选已入 docs/screenshots）
 rev_*.png
 grab_*.png
+
+# 抓图探针
+m2_capture.py
+m5_nav.py
+review_nav.py
