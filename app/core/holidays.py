@@ -91,9 +91,11 @@ def _fetch_year_online(year):
 
 
 def refresh(years=None, force=False):
-    """联网更新。返回 (更新了哪些年, 失败描述或空)。"""
+    """联网更新。返回 (更新了哪些年, 失败描述或空)。
+    默认只拉当年——次年数据通常在 11-12 月才由国务院发布，
+    提前请求必然失败且拖慢速度。"""
     now = dt.datetime.now()
-    years = years or [now.year, now.year + 1]
+    years = years or [now.year]
     cache = {"fetched_at": "", "years": {}}
     try:
         with open(_cache_path(), encoding="utf-8") as f:

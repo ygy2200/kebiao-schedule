@@ -25,6 +25,13 @@ from app.ui import tokens
 
 from qfluentwidgets import MessageBoxBase
 
+from PySide6.QtCore import QObject, Signal as _QSignal
+
+
+class _HolidayRefreshBridge(QObject):
+    done = _QSignal(bool, str)  # (成功?, 消息)
+
+
 ACCENT_PRESETS = [
     ("Windows 蓝", "#0067C0"), ("紫", "#7C5CBF"), ("青", "#00818B"), ("绿", "#0F7B0F"),
     ("琥珀", "#9D5D00"), ("橙", "#CA5010"), ("玫红", "#C239B3"), ("石板灰", "#5D6D7E"),
@@ -236,16 +243,35 @@ class SettingsPage(ScrollArea):
             InfoBar.success("已开启", "写入注册表 HKCU Run 键，取消勾选即回滚", parent=self)
 
     def _refresh_holidays(self):
+        """后台线程联网更新（此前同步跑在主线程，全断时冻结界面 60s+）。"""
+        import threading
         from app.core import holidays as _hol
-        got, err = _hol.refresh(force=True)
-        _exists, _at = _hol.cache_info()
-        if got:
-            self.holiday_card.setContent(
-                f"已更新 {('、'.join(str(g) for g in got))} 年 · 上次更新：{_at[:10]}")
-            InfoBar.success("节假日数据已更新", "、".join(str(g) for g in got) + " 年",
-                            parent=self)
-        else:
-            InfoBar.warning("更新失败", f"已使用内置 / 缓存数据（{err[:40]}）", parent=self)
+        if getattr(self, "_hol_updating", False):
+            return
+        self._hol_updating = True
+        self.holiday_card.setEnabled(False)
+        self.holiday_card.setContent("正在联网更新…（最多约半分钟，可继续用其他页面）")
+        bridge = _HolidayRefreshBridge(self)
+        year = dt.date.today().year
+
+        def worker():
+            got, err = _hol.refresh(force=True, years=[year])
+            bridge.done.emit(bool(got), err or "、".join(str(g) for g in got))
+
+        def on_done(ok, msg):
+            self._hol_updating = False
+            self.holiday_card.setEnabled(True)
+            _exists, _at = _hol.cache_info()
+            if ok:
+                self.holiday_card.setContent(f"已更新 · 上次：{_at[:10]}")
+                InfoBar.success("节假日数据已更新", msg, duration=4000, parent=self)
+            else:
+                self.holiday_card.setContent("更新失败 · 使用内置 / 缓存数据")
+                InfoBar.warning("更新失败", "已降级内置数据（" + msg[:50] + "）",
+                                duration=5000, parent=self)
+
+        bridge.done.connect(on_done)
+        threading.Thread(target=worker, daemon=True).start()
 
     def _do_backup(self):
         from app.core import backup
