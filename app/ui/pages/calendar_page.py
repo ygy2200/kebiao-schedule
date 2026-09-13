@@ -148,6 +148,7 @@ class CalendarPage(QWidget):
 
         self.detail_label = CaptionLabel("")
         self.detail_label.setStyleSheet("font-size: 13pt;")
+        self.detail_label.setFixedHeight(26)
         detail_row = QHBoxLayout()
         detail_row.setSpacing(tokens.SPACE["m"])
         detail_row.addWidget(self.detail_label, 1)

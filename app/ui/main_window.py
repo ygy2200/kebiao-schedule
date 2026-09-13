@@ -30,6 +30,9 @@ class MainWindow(FluentWindow):
         self.setWindowTitle("课表日程助手")
         self.setMinimumSize(1000, 660)
         self.resize(1120, 720)
+        # 侧边栏：展开宽度收窄 + 持久展开（点汉堡切换，不自动收起）
+        self.navigationInterface.setExpandWidth(190)
+        self.navigationInterface.setCollapsible(False)
         # Mica 由 DWM 合成：PrintWindow 抓不到且深浅与 qfw 主题判定脱钩
         # （系统模式/应用模式打架，实测深窗浅卡），关闭后用实底——观感为
         # Fluent 降级形态但确定性 100%
@@ -60,6 +63,22 @@ class MainWindow(FluentWindow):
             except Exception:
                 pass
         qconfig.themeChanged.connect(lambda *_: _on_theme_changed())
+
+    def showEvent(self, ev):
+        super().showEvent(ev)
+        # 从托盘恢复时关闭按钮可能残留 hover 红态（无 leave 事件），强制清除
+        try:
+            from PySide6.QtCore import QEvent
+            app = QApplication.instance()
+            for btn in (self.titleBar.closeBtn, self.titleBar.minBtn,
+                        self.titleBar.maxBtn):
+                if btn.underMouse():
+                    continue
+                btn.setAttribute(Qt.WA_UnderMouse, False)
+                app.sendEvent(btn, QEvent(QEvent.Leave))
+                btn.update()
+        except Exception:
+            pass
 
     def bring_up(self):
         self.show()
